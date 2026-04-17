@@ -1,0 +1,48 @@
+# ─── PlatformIO / Arduino (Firmware) ───────────────────────
+.pio/
+.pioenvs/
+.piolibdeps/
+.vscode/
+*.o
+*.d
+*.elf
+*.bin
+*.hex
+*.map
+
+# ─── Flutter / Dart (App) ───────────────────────────────────
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.packages
+app/build/
+app/ios/Pods/
+app/ios/.symlinks/
+app/ios/Flutter/Flutter.framework
+app/ios/Flutter/Flutter.podspec
+app/android/.gradle/
+app/android/captures/
+app/android/local.properties
+app/*.iml
+app/pubspec.lock
+
+# ─── Firebase / Secrets ─────────────────────────────────────
+google-services.json
+GoogleService-Info.plist
+.env
+secrets.dart
+firebase_options.dart
+
+# ─── OS ─────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Editors ────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# ─── Logs ───────────────────────────────────────────────────
+*.log
