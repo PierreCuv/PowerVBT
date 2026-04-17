@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PowerVBT — App Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0f; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif; color: #fff; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; gap: 40px; }
+
+  h1 { font-size: 14px; text-transform: uppercase; letter-spacing: 4px; color: #555; }
+
+  .screens { display: flex; gap: 32px; flex-wrap: wrap; justify-content: center; }
+
+  .phone { width: 320px; background: #111118; border-radius: 44px; border: 2px solid #222; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,0.6); flex-shrink: 0; }
+
+  .phone-notch { background: #111118; height: 36px; display: flex; align-items: center; justify-content: center; }
+  .notch-pill { width: 100px; height: 28px; background: #000; border-radius: 20px; }
+
+  .screen { padding: 0; min-height: 600px; }
+  .screen-label { text-align: center; font-size: 11px; color: #444; margin-top: 16px; letter-spacing: 2px; text-transform: uppercase; }
+
+  /* ── COLORS ── */
+  :root {
+    --green: #00ff88;
+    --yellow: #ffcc00;
+    --red: #ff4444;
+    --orange: #ff8800;
+    --blue: #4488ff;
+    --bg: #111118;
+    --card: #1a1a24;
+    --border: #2a2a3a;
+    --text2: #888;
+  }
+
+  /* ── SHARED ── */
+  .status-bar { display: flex; justify-content: space-between; align-items: center; padding: 8px 20px 0; font-size: 11px; color: #666; }
+  .nav-bar { display: flex; justify-content: space-around; padding: 12px 0 20px; border-top: 1px solid var(--border); margin-top: auto; }
+  .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 9px; color: var(--text2); cursor: pointer; }
+  .nav-item.active { color: var(--green); }
+  .nav-icon { font-size: 20px; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; }
+
+  /* ── SCREEN 1 : LIVE ── */
+  .live-screen { display: flex; flex-direction: column; height: 660px; background: var(--bg); }
+  .live-header { padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
+  .live-title { font-size: 13px; color: var(--text2); }
+  .ble-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  .exercise-pill { margin: 0 20px 16px; background: var(--card); border-radius: 14px; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; }
+  .ex-name { font-size: 15px; font-weight: 700; }
+  .ex-load { font-size: 22px; font-weight: 800; color: var(--green); }
+  .ex-load span { font-size: 13px; color: var(--text2); font-weight: 400; }
+
+  .velocity-main { margin: 0 20px; background: var(--card); border-radius: 24px; padding: 24px; text-align: center; border: 1px solid #00ff8822; position: relative; overflow: hidden; }
+  .velocity-main::before { content: ''; position: absolute; top: -40px; left: 50%; transform: translateX(-50%); width: 160px; height: 160px; background: radial-gradient(circle, #00ff8818, transparent 70%); }
+  .vel-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 2px; }
+  .vel-value { font-size: 80px; font-weight: 900; color: var(--green); line-height: 1; letter-spacing: -2px; text-shadow: 0 0 40px #00ff8844; }
+  .vel-unit { font-size: 18px; color: var(--text2); margin-top: -4px; }
+  .vel-zone { margin-top: 8px; }
+
+  .vel-bar-wrap { margin: 16px 20px; }
+  .vel-bar-track { height: 8px; background: #1e1e2e; border-radius: 4px; overflow: hidden; }
+  .vel-bar-fill { height: 100%; width: 62%; background: linear-gradient(90deg, #ff4444, #ffcc00, #00ff88); border-radius: 4px; transition: width .3s; }
+  .vel-bar-labels { display: flex; justify-content: space-between; font-size: 9px; color: #444; margin-top: 4px; }
+
+  .rep-counter { display: flex; gap: 12px; margin: 0 20px; }
+  .rep-card { flex: 1; background: var(--card); border-radius: 14px; padding: 12px; text-align: center; }
+  .rep-card-label { font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; }
+  .rep-card-value { font-size: 28px; font-weight: 800; }
+
+  .last-reps { margin: 12px 20px 0; }
+  .last-reps-label { font-size: 10px; color: var(--text2); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+  .rep-dots { display: flex; gap: 6px; }
+  .rep-dot { flex: 1; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; }
+
+  .stop-btn { margin: 12px 20px; background: #ff444418; border: 1px solid #ff444433; border-radius: 16px; padding: 14px; text-align: center; font-size: 14px; font-weight: 700; color: var(--red); cursor: pointer; }
+
+  /* ── SCREEN 2 : SUMMARY ── */
+  .summary-screen { display: flex; flex-direction: column; height: 660px; background: var(--bg); }
+  .sum-header { padding: 16px 20px 8px; }
+  .sum-title { font-size: 20px; font-weight: 800; }
+  .sum-subtitle { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .sum-stats { display: flex; gap: 10px; margin: 12px 20px; }
+  .sum-stat { flex: 1; background: var(--card); border-radius: 14px; padding: 12px 10px; text-align: center; }
+  .sum-stat-val { font-size: 20px; font-weight: 800; }
+  .sum-stat-lbl { font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+  .rep-table { margin: 0 20px; }
+  .rep-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .rep-num { width: 24px; height: 24px; border-radius: 8px; background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  .rep-vel-bar { flex: 1; height: 8px; background: #1e1e2e; border-radius: 4px; overflow: hidden; }
+  .rep-vel-fill { height: 100%; border-radius: 4px; }
+  .rep-vel-num { font-size: 13px; font-weight: 700; width: 38px; text-align: right; }
+  .rep-tut { font-size: 10px; color: var(--text2); width: 32px; text-align: right; }
+  .rpe-section { margin: 12px 20px; background: var(--card); border-radius: 16px; padding: 14px; }
+  .rpe-title { font-size: 12px; color: var(--text2); margin-bottom: 10px; }
+  .rpe-slider { display: flex; gap: 6px; }
+  .rpe-btn { flex: 1; height: 28px; border-radius: 8px; background: #1e1e2e; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; cursor: pointer; }
+  .rpe-btn.selected { background: var(--orange); color: #000; }
+  .save-btn { margin: 12px 20px 0; background: var(--green); border-radius: 16px; padding: 16px; text-align: center; font-size: 15px; font-weight: 800; color: #000; cursor: pointer; }
+
+  /* ── SCREEN 3 : STATS ── */
+  .stats-screen { display: flex; flex-direction: column; height: 660px; background: var(--bg); overflow: hidden; }
+  .stats-header { padding: 16px 20px 12px; }
+  .stats-title { font-size: 20px; font-weight: 800; }
+  .lift-tabs { display: flex; gap: 8px; margin: 0 20px 12px; }
+  .lift-tab { flex: 1; padding: 8px; border-radius: 10px; text-align: center; font-size: 12px; font-weight: 700; cursor: pointer; background: var(--card); color: var(--text2); }
+  .lift-tab.active { background: var(--blue); color: #fff; }
+  .record-card { margin: 0 20px 10px; background: var(--card); border-radius: 18px; padding: 16px; display: flex; align-items: center; gap: 14px; }
+  .record-icon { font-size: 28px; }
+  .record-info { flex: 1; }
+  .record-label { font-size: 11px; color: var(--text2); }
+  .record-value { font-size: 22px; font-weight: 800; }
+  .record-date { font-size: 10px; color: #444; }
+  .chart-card { margin: 0 20px 10px; background: var(--card); border-radius: 18px; padding: 16px; }
+  .chart-title { font-size: 12px; color: var(--text2); margin-bottom: 12px; }
+  .mini-chart { display: flex; align-items: flex-end; gap: 4px; height: 50px; }
+  .bar { flex: 1; border-radius: 4px 4px 0 0; background: linear-gradient(180deg, var(--blue), #4488ff44); min-height: 4px; }
+  .sbd-card { margin: 0 20px; background: linear-gradient(135deg, #1a1a2e, #16213e); border-radius: 18px; padding: 16px; border: 1px solid #4488ff33; }
+  .sbd-title { font-size: 12px; color: var(--blue); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+  .sbd-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; }
+  .sbd-lift { font-size: 13px; color: var(--text2); }
+  .sbd-val { font-size: 16px; font-weight: 800; }
+
+  /* ── SCREEN 4 : PROFILE ── */
+  .profile-screen { display: flex; flex-direction: column; height: 660px; background: var(--bg); }
+  .profile-hero { padding: 20px; text-align: center; }
+  .avatar { width: 80px; height: 80px; border-radius: 40px; background: linear-gradient(135deg, var(--green), var(--blue)); margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; font-size: 32px; }
+  .profile-name { font-size: 22px; font-weight: 800; }
+  .profile-weight { font-size: 13px; color: var(--text2); }
+  .profile-badges { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
+  .badge { padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; background: var(--card); border: 1px solid var(--border); }
+  .strength-profile { margin: 0 20px 12px; background: var(--card); border-radius: 18px; padding: 16px; }
+  .sp-title { font-size: 12px; color: var(--text2); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  .sp-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .sp-row:last-child { border-bottom: none; }
+  .sp-lift { font-size: 13px; }
+  .sp-vals { display: flex; gap: 12px; align-items: center; }
+  .sp-rm { font-size: 16px; font-weight: 800; }
+  .sp-vel { font-size: 11px; color: var(--text2); }
+  .sp-grade { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 900; }
+  .recent-prs { margin: 0 20px; background: var(--card); border-radius: 18px; padding: 16px; }
+  .pr-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .pr-row:last-child { border-bottom: none; }
+  .pr-left { display: flex; flex-direction: column; }
+  .pr-name { font-size: 12px; font-weight: 700; }
+  .pr-date { font-size: 10px; color: #444; }
+  .pr-val { font-size: 14px; font-weight: 800; color: var(--green); }
+</style>
+</head>
+<body>
+
+<h1>PowerVBT — App Screens Mockup</h1>
+
+<div class="screens">
+
+  <!-- ── SCREEN 1: LIVE SESSION ── -->
+  <div>
+    <div class="phone">
+      <div class="phone-notch"><div class="notch-pill"></div></div>
+      <div class="live-screen screen">
+        <div class="status-bar"><span>9:41</span><span>⚡ 78%</span></div>
+        <div class="live-header">
+          <span class="live-title">Session en cours</span>
+          <div class="ble-dot"></div>
+        </div>
+
+        <div class="exercise-pill">
+          <div>
+            <div style="font-size:10px;color:var(--text2)">SÉRIE 3</div>
+            <div class="ex-name">Bench Press</div>
+          </div>
+          <div class="ex-load">100<span> kg</span></div>
+        </div>
+
+        <div class="velocity-main">
+          <div class="vel-label">Vitesse concentrique</div>
+          <div class="vel-value">0.72</div>
+          <div class="vel-unit">m/s</div>
+          <div class="vel-zone"><span class="tag" style="background:#ffcc0022;color:#ffcc00">⚡ Strength-Speed</span></div>
+        </div>
+
+        <div class="vel-bar-wrap">
+          <div class="vel-bar-track"><div class="vel-bar-fill"></div></div>
+          <div class="vel-bar-labels"><span>0.0</span><span>0.35</span><span>0.5</span><span>0.75</span><span>1.0+</span></div>
+        </div>
+
+        <div class="rep-counter">
+          <div class="rep-card">
+            <div class="rep-card-label">Reps</div>
+            <div class="rep-card-value" style="color:var(--green)">5</div>
+          </div>
+          <div class="rep-card">
+            <div class="rep-card-label">Pic</div>
+            <div class="rep-card-value" style="color:var(--yellow)">0.81</div>
+          </div>
+          <div class="rep-card">
+            <div class="rep-card-label">Moy.</div>
+            <div class="rep-card-value" style="color:var(--text2)">0.76</div>
+          </div>
+        </div>
+
+        <div class="last-reps">
+          <div class="last-reps-label">Historique série</div>
+          <div class="rep-dots">
+            <div class="rep-dot" style="background:#00ff8822;color:var(--green)">0.81</div>
+            <div class="rep-dot" style="background:#00ff8822;color:var(--green)">0.79</div>
+            <div class="rep-dot" style="background:#ffcc0022;color:var(--yellow)">0.76</div>
+            <div class="rep-dot" style="background:#ffcc0022;color:var(--yellow)">0.74</div>
+            <div class="rep-dot" style="background:#ff880022;color:var(--orange)">0.72</div>
+          </div>
+        </div>
+
+        <div class="stop-btn">⏹ Terminer la série</div>
+
+        <div class="nav-bar">
+          <div class="nav-item active"><div class="nav-icon">⚡</div><span>Live</span></div>
+          <div class="nav-item"><div class="nav-icon">📊</div><span>Stats</span></div>
+          <div class="nav-item"><div class="nav-icon">👤</div><span>Profil</span></div>
+          <div class="nav-item"><div class="nav-icon">⚙️</div><span>Réglages</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label">01 — Live Session</div>
+  </div>
+
+  <!-- ── SCREEN 2: SET SUMMARY ── -->
+  <div>
+    <div class="phone">
+      <div class="phone-notch"><div class="notch-pill"></div></div>
+      <div class="summary-screen screen">
+        <div class="status-bar"><span>9:44</span><span>⚡ 77%</span></div>
+        <div class="sum-header">
+          <div class="sum-title">Résumé série</div>
+          <div class="sum-subtitle">Bench Press · 100 kg · 5 reps</div>
+        </div>
+
+        <div class="sum-stats">
+          <div class="sum-stat">
+            <div class="sum-stat-val" style="color:var(--green)">0.81</div>
+            <div class="sum-stat-lbl">Pic m/s</div>
+          </div>
+          <div class="sum-stat">
+            <div class="sum-stat-val" style="color:var(--yellow)">0.76</div>
+            <div class="sum-stat-lbl">Moy m/s</div>
+          </div>
+          <div class="sum-stat">
+            <div class="sum-stat-val" style="color:var(--red)">-11%</div>
+            <div class="sum-stat-lbl">Fatigue</div>
+          </div>
+          <div class="sum-stat">
+            <div class="sum-stat-val" style="color:var(--blue)">~118</div>
+            <div class="sum-stat-lbl">1RM est.</div>
+          </div>
+        </div>
+
+        <div class="rep-table">
+          <div class="rep-row" style="border-bottom:1px solid #2a2a3a;padding-bottom:6px;margin-bottom:4px">
+            <div style="width:24px;font-size:9px;color:#444">#</div>
+            <div style="flex:1;font-size:9px;color:#444;text-align:center">Vitesse</div>
+            <div style="width:38px;font-size:9px;color:#444;text-align:right">m/s</div>
+            <div style="width:32px;font-size:9px;color:#444;text-align:right">TUT</div>
+          </div>
+          <div class="rep-row">
+            <div class="rep-num">1</div>
+            <div class="rep-vel-bar"><div class="rep-vel-fill" style="width:81%;background:var(--green)"></div></div>
+            <div class="rep-vel-num" style="color:var(--green)">0.81</div>
+            <div class="rep-tut">1.2s</div>
+          </div>
+          <div class="rep-row">
+            <div class="rep-num">2</div>
+            <div class="rep-vel-bar"><div class="rep-vel-fill" style="width:79%;background:var(--green)"></div></div>
+            <div class="rep-vel-num" style="color:var(--green)">0.79</div>
+            <div class="rep-tut">1.3s</div>
+          </div>
+          <div class="rep-row">
+            <div class="rep-num">3</div>
+            <div class="rep-vel-bar"><div class="rep-vel-fill" style="width:76%;background:var(--yellow)"></div></div>
+            <div class="rep-vel-num" style="color:var(--yellow)">0.76</div>
+            <div class="rep-tut">1.4s</div>
+          </div>
+          <div class="rep-row">
+            <div class="rep-num">4</div>
+            <div class="rep-vel-bar"><div class="rep-vel-fill" style="width:74%;background:var(--yellow)"></div></div>
+            <div class="rep-vel-num" style="color:var(--yellow)">0.74</div>
+            <div class="rep-tut">1.5s</div>
+          </div>
+          <div class="rep-row">
+            <div class="rep-num">5</div>
+            <div class="rep-vel-bar"><div class="rep-vel-fill" style="width:72%;background:var(--orange)"></div></div>
+            <div class="rep-vel-num" style="color:var(--orange)">0.72</div>
+            <div class="rep-tut">1.6s</div>
+          </div>
+        </div>
+
+        <div class="rpe-section">
+          <div class="rpe-title">RPE ressenti</div>
+          <div class="rpe-slider">
+            <div class="rpe-btn">6</div>
+            <div class="rpe-btn">7</div>
+            <div class="rpe-btn selected">8</div>
+            <div class="rpe-btn">8.5</div>
+            <div class="rpe-btn">9</div>
+          </div>
+        </div>
+
+        <div class="save-btn">✓ Enregistrer la série</div>
+
+        <div class="nav-bar">
+          <div class="nav-item active"><div class="nav-icon">⚡</div><span>Live</span></div>
+          <div class="nav-item"><div class="nav-icon">📊</div><span>Stats</span></div>
+          <div class="nav-item"><div class="nav-icon">👤</div><span>Profil</span></div>
+          <div class="nav-item"><div class="nav-icon">⚙️</div><span>Réglages</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label">02 — Set Summary</div>
+  </div>
+
+  <!-- ── SCREEN 3: STATS ── -->
+  <div>
+    <div class="phone">
+      <div class="phone-notch"><div class="notch-pill"></div></div>
+      <div class="stats-screen screen">
+        <div class="status-bar"><span>9:45</span><span>⚡ 77%</span></div>
+        <div class="stats-header">
+          <div class="stats-title">Statistiques</div>
+        </div>
+
+        <div class="lift-tabs">
+          <div class="lift-tab active">Squat</div>
+          <div class="lift-tab">Bench</div>
+          <div class="lift-tab">Deadlift</div>
+        </div>
+
+        <div class="record-card">
+          <div class="record-icon">🏆</div>
+          <div class="record-info">
+            <div class="record-label">Record absolu estimé</div>
+            <div class="record-value">185 <span style="font-size:14px;color:var(--text2)">kg</span></div>
+            <div class="record-date">15 avril 2026 · 0.35 m/s</div>
+          </div>
+          <div><span class="tag" style="background:#00ff8822;color:var(--green)">+5kg</span></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-title">Vitesse moy. concentrique — 30 jours</div>
+          <div class="mini-chart">
+            <div class="bar" style="height:40%"></div>
+            <div class="bar" style="height:45%"></div>
+            <div class="bar" style="height:38%"></div>
+            <div class="bar" style="height:55%"></div>
+            <div class="bar" style="height:50%"></div>
+            <div class="bar" style="height:60%"></div>
+            <div class="bar" style="height:52%"></div>
+            <div class="bar" style="height:70%"></div>
+            <div class="bar" style="height:65%"></div>
+            <div class="bar" style="height:80%"></div>
+            <div class="bar" style="height:75%"></div>
+            <div class="bar" style="height:90%"></div>
+          </div>
+        </div>
+
+        <div class="sbd-card">
+          <div class="sbd-title">📋 Meilleur total SBD — séance</div>
+          <div class="sbd-row">
+            <div class="sbd-lift">🦵 Squat</div>
+            <div class="sbd-val" style="color:var(--green)">180 kg</div>
+          </div>
+          <div class="sbd-row">
+            <div class="sbd-lift">💪 Bench</div>
+            <div class="sbd-val" style="color:var(--green)">115 kg</div>
+          </div>
+          <div class="sbd-row">
+            <div class="sbd-lift">🔱 Deadlift</div>
+            <div class="sbd-val" style="color:var(--green)">220 kg</div>
+          </div>
+          <div style="border-top:1px solid #4488ff33;margin-top:8px;padding-top:8px;display:flex;justify-content:space-between">
+            <div style="font-size:13px;color:var(--text2)">Total</div>
+            <div style="font-size:20px;font-weight:900;color:var(--blue)">515 kg</div>
+          </div>
+        </div>
+
+        <div class="nav-bar">
+          <div class="nav-item"><div class="nav-icon">⚡</div><span>Live</span></div>
+          <div class="nav-item active"><div class="nav-icon">📊</div><span>Stats</span></div>
+          <div class="nav-item"><div class="nav-icon">👤</div><span>Profil</span></div>
+          <div class="nav-item"><div class="nav-icon">⚙️</div><span>Réglages</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label">03 — Statistics</div>
+  </div>
+
+  <!-- ── SCREEN 4: PROFILE ── -->
+  <div>
+    <div class="phone">
+      <div class="phone-notch"><div class="notch-pill"></div></div>
+      <div class="profile-screen screen">
+        <div class="status-bar"><span>9:46</span><span>⚡ 77%</span></div>
+
+        <div class="profile-hero">
+          <div class="avatar">🏋️</div>
+          <div class="profile-name">PierreCuv</div>
+          <div class="profile-weight">83 kg · Catégorie -83kg</div>
+          <div class="profile-badges">
+            <div class="badge">🦵 SBD</div>
+            <div class="badge">⚡ 47 séances</div>
+            <div class="badge">📅 6 mois</div>
+          </div>
+        </div>
+
+        <div class="strength-profile">
+          <div class="sp-title">Profil de force</div>
+          <div class="sp-row">
+            <div class="sp-lift">🦵 Squat</div>
+            <div class="sp-vals">
+              <div>
+                <div class="sp-rm">185 kg</div>
+                <div class="sp-vel">0.35 m/s</div>
+              </div>
+              <div class="sp-grade" style="background:#00ff8822;color:var(--green)">B+</div>
+            </div>
+          </div>
+          <div class="sp-row">
+            <div class="sp-lift">💪 Bench</div>
+            <div class="sp-vals">
+              <div>
+                <div class="sp-rm">118 kg</div>
+                <div class="sp-vel">0.17 m/s</div>
+              </div>
+              <div class="sp-grade" style="background:#ffcc0022;color:var(--yellow)">B</div>
+            </div>
+          </div>
+          <div class="sp-row">
+            <div class="sp-lift">🔱 Deadlift</div>
+            <div class="sp-vals">
+              <div>
+                <div class="sp-rm">220 kg</div>
+                <div class="sp-vel">0.12 m/s</div>
+              </div>
+              <div class="sp-grade" style="background:#4488ff22;color:var(--blue)">A-</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="recent-prs" style="margin-top:12px">
+          <div class="sp-title" style="margin-bottom:8px">Records récents</div>
+          <div class="pr-row">
+            <div class="pr-left">
+              <div class="pr-name">🔱 Deadlift — 1RM estimé</div>
+              <div class="pr-date">15 avril 2026</div>
+            </div>
+            <div class="pr-val">+5 kg</div>
+          </div>
+          <div class="pr-row">
+            <div class="pr-left">
+              <div class="pr-name">💪 Bench — Vitesse pic</div>
+              <div class="pr-date">12 avril 2026</div>
+            </div>
+            <div class="pr-val">1.21 m/s</div>
+          </div>
+          <div class="pr-row">
+            <div class="pr-left">
+              <div class="pr-name">📋 Total SBD séance</div>
+              <div class="pr-date">10 avril 2026</div>
+            </div>
+            <div class="pr-val">515 kg</div>
+          </div>
+        </div>
+
+        <div class="nav-bar">
+          <div class="nav-item"><div class="nav-icon">⚡</div><span>Live</span></div>
+          <div class="nav-item"><div class="nav-icon">📊</div><span>Stats</span></div>
+          <div class="nav-item active"><div class="nav-icon">👤</div><span>Profil</span></div>
+          <div class="nav-item"><div class="nav-icon">⚙️</div><span>Réglages</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-label">04 — Athlete Profile</div>
+  </div>
+
+</div>
+</body>
+</html>
