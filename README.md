@@ -245,4 +245,4 @@ The source code is currently **private** — maintained by a closed group of ath
 
 ---
 
-*PowerVBT — because every rep tells a story.*
+*PowerVBT — because every rep ...  gRoS KayOUU*
