@@ -1,0 +1,16 @@
+# Arduino / PlatformIO
+build/
+*.bin
+*.elf
+*.hex
+.pio/
+.vscode/
+
+# OpenSCAD
+*.stl
+*.bak
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
