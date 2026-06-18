@@ -24,6 +24,7 @@ connecte au capteur via Web Bluetooth.
 |---------|---------|
 | [`firmware/vbt-tracker/`](firmware/vbt-tracker/) | Le sketch Arduino (`.ino` + filtre de Madgwick) |
 | [`hardware/3d/`](hardware/3d/) | Modèles OpenSCAD : assemblage et boîtier imprimable |
+| [`hardware/POWER.md`](hardware/POWER.md) | Alimentation, charge et choix du circuit marche/arrêt |
 | [`docs/`](docs/) | La page web (servie par GitHub Pages) |
 
 ## Matériel
@@ -43,8 +44,19 @@ connecte au capteur via Web Bluetooth.
 | SCL              | D6 (GPIO43)   | I2C — horloge |
 | INT              | D0 (GPIO1)    | Réveil sur mouvement |
 
-La batterie LiPo se branche sur les pads BAT+ / BAT− au dos du XIAO
-(chargeur intégré : elle se recharge dès que l'USB-C est branché).
+### Alimentation et marche/arrêt
+
+La batterie LiPo (1S, avec son **circuit de protection PCM**) se branche sur
+les pads **BAT+ / BAT−** au dos du XIAO (chargeur intégré SGM40567, ~110 mA).
+
+L'allumage se fait par un **interrupteur sur la broche EN** : EN à la masse =
+éteint, EN libre = allumé. La batterie reste connectée en permanence, donc
+**elle se recharge même appareil éteint** dès que l'USB-C est branché.
+
+> ⚠️ Le XIAO ESP32-S3 **n'a pas de protection contre la sur-décharge** : c'est
+> le PCM de la batterie qui l'assure. Le détail de l'analyse électrique et la
+> justification du choix EN (vs interrupteur sur BAT+) sont dans
+> [`hardware/POWER.md`](hardware/POWER.md).
 
 > **Autonomie** — la LED d'alimentation du GY-521 consomme ~1-2 mA en
 > permanence, soit plus que tout le reste du système en veille. Pour une
