@@ -4,12 +4,13 @@
 // envoyée en Bluetooth Low Energy (service type Nordic UART).
 //
 // Câblage GY-521 -> XIAO ESP32-S3 :
-//   VCC -> 3V3 | GND -> GND | SDA -> D4 | SCL -> D5 | INT -> D0
+//   VCC->3V3 | GND->GND | SDA->D5(GPIO6) | SCL->D6(GPIO43) | INT->D0(GPIO1)
 //
 // Côté iPhone : navigateur Bluefy -> ouvrir la page vbt-ble.html
 // ============================================================
 
 #include <Wire.h>
+#include "driver/gpio.h"
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
@@ -29,13 +30,17 @@
 // ---------- Réglages capteur / algo (à calibrer) ----------
 #define MPU_ADDR        0x68
 #define PIN_MPU_INT     GPIO_NUM_1
+#define PIN_I2C_SDA     6        // broche serigraphiee D5
+#define PIN_I2C_SCL     43       // broche serigraphiee D6 (= U0TXD, voir setup)
 #define SAMPLE_HZ       200
-#define TH_START        1.2f
-#define TH_STILL        0.45f
-#define STILL_MS        350
-#define REP_MIN_MS      180
-#define REP_MAX_MS      3000
-#define DISP_MIN_M      0.12f
+// --- seuils de detection de rep (a calibrer avec le flux de debug) ---
+#define V_MOVE          0.12f       // m/s : vitesse a partir de laquelle on considere un mouvement
+#define A_QUIET         0.50f       // m/s2 : sous ce seuil (+ gyro) = quasi-immobile
+#define G_QUIET         0.15f       // rad/s (~8.6 deg/s) : gyro sous ce seuil = quasi-immobile
+#define QUIET_MS        250         // duree de calme avant remise a zero de la vitesse (ZVU)
+#define ECC_MIN_DISP    0.05f       // m : descente minimale pour valider une vraie phase excentrique
+#define DISP_MIN_M      0.10f       // m : deplacement concentrique minimal pour compter la rep
+#define REP_MIN_MS      150         // duree concentrique minimale
 #define SLEEP_AFTER_MS  600000UL    // 10 min (n'agit que si ENABLE_SLEEP=1)
 #define MAX_REPS        40
 
@@ -52,16 +57,25 @@ RTC_DATA_ATTR float gyroBias[3] = {0, 0, 0};
 BLEServer*         bleServer = nullptr;
 BLECharacteristic* txChar    = nullptr;
 volatile bool      connected = false;
+volatile bool      reAdvertise = false;     // demande de re-publicité (depuis le callback)
+volatile uint32_t  disconnectMs = 0;
 
 // ---------- État détection ----------
-enum RepState { ST_IDLE, ST_CONC, ST_SUPPRESS };
-RepState state = ST_IDLE;
+// ST_WAIT : au repos / entre les reps  | ST_DESC : phase excentrique (descente)
+// ST_ASC  : phase concentrique (montee, c'est elle qu'on mesure)
+enum RepState { ST_WAIT, ST_DESC, ST_ASC };
+RepState state = ST_WAIT;
 
-float    vOff = 0, v = 0, disp = 0, repPeak = 0;
-uint32_t repStartMs = 0, stillSinceMs = 0, lastMotionMs = 0, warmupUntil = 0, ledOffMs = 0;
+float    vOff = 0;                 // offset residuel d'accel verticale au repos
+float    vVert = 0;                // vitesse verticale integree (m/s, + = montee)
+float    eccDisp = 0;              // deplacement de la descente (suivi, signe negatif)
+float    concDisp = 0, concPeak = 0;   // deplacement et pic de vitesse de la montee
+uint32_t concStartMs = 0, quietSinceMs = 0;
+uint32_t lastMotionMs = 0, warmupUntil = 0, ledOffMs = 0;
 float    repMean[MAX_REPS], repPk[MAX_REPS];
 int      repCount = 0;
 bool     mpuOk = false;
+uint8_t  whoami = 0;
 
 // ============================================================
 // MPU6050
@@ -159,6 +173,14 @@ void dumpReps() {
     notify("R," + String(i) + "," + String(repMean[i], 2) + "," + String(repPk[i], 2) + "\n");
 }
 
+// Battement de coeur : etat courant + derniere vitesse, pour que la page
+// sache que le lien est vivant meme entre deux repetitions.
+void sendStatus() {
+  const char* st = state == ST_ASC ? "1" : "0";   // 1 = phase concentrique en cours
+  float lastMean = repCount ? repMean[repCount - 1] : 0;
+  notify("S," + String(st) + "," + String(lastMean, 2) + "," + String(repCount) + "\n");
+}
+
 void goToSleep() {
   Serial.println("Passage en deep sleep");
   BLEDevice::deinit(true);
@@ -168,10 +190,15 @@ void goToSleep() {
 }
 
 class ServerCB : public BLEServerCallbacks {
-  void onConnect(BLEServer*) override    { connected = true;  Serial.println("BLE connecte"); }
-  void onDisconnect(BLEServer* s) override {
-    connected = false; Serial.println("BLE deconnecte");
-    s->getAdvertising()->start();        // re-annonce pour reconnexion
+  void onConnect(BLEServer*) override {
+    connected = true;
+    Serial.println("BLE connecte");
+  }
+  void onDisconnect(BLEServer*) override {
+    connected = false;
+    disconnectMs = millis();
+    reAdvertise = true;                  // la re-publicite se fait dans loop(), pas ici
+    Serial.println("BLE deconnecte");
   }
 };
 
@@ -201,46 +228,91 @@ void setupBLE() {
   BLEAdvertising* adv = BLEDevice::getAdvertising();
   adv->addServiceUUID(SVC_UUID);
   adv->setScanResponse(true);
+  adv->setMinPreferred(0x06);            // intervalles recommandes pour iOS
+  adv->setMinPreferred(0x12);
   BLEDevice::startAdvertising();
   Serial.println("BLE pret : cherche \"VBT-Tracker\"");
 }
 
 // ============================================================
-// Détection de rep
+// Détection de rep — machine à états basée sur la VITESSE verticale.
+// Mesure la phase concentrique (montée), quel que soit l'ordre des phases :
+//   squat/bench : ATTENTE -> DESCENTE -> (bas) -> MONTEE -> rep
+//   souleve     : ATTENTE -> MONTEE -> rep
 // ============================================================
-void endRep(uint32_t now) {
-  float durS = (now - repStartMs) / 1000.0f;
-  float mean = (durS > 0) ? disp / durS : 0;
-  if (disp >= DISP_MIN_M && repCount < MAX_REPS) {
-    repMean[repCount] = mean; repPk[repCount] = repPeak;
-    notify("R," + String(repCount) + "," + String(mean, 2) + "," + String(repPeak, 2) + "\n");
+void finishRep(uint32_t now) {
+  float durS = (now - concStartMs) / 1000.0f;
+  float mean = (durS > 0) ? concDisp / durS : 0;
+  if (concDisp >= DISP_MIN_M && (now - concStartMs) >= REP_MIN_MS && repCount < MAX_REPS) {
+    repMean[repCount] = mean; repPk[repCount] = concPeak;
+    notify("R," + String(repCount) + "," + String(mean, 2) + "," + String(concPeak, 2) + "\n");
     repCount++;
     digitalWrite(LED_BUILTIN, LOW); ledOffMs = now + 150;
     Serial.printf(">>> REP %d : moy %.2f m/s, pic %.2f m/s, depl %.2f m\n",
-                  repCount, mean, repPeak, disp);
+                  repCount, mean, concPeak, concDisp);
   }
-  state = ST_SUPPRESS; stillSinceMs = now;
+  state = ST_WAIT;
 }
 
-void processSample(float aVert, float dt, uint32_t now) {
-  if (fabsf(aVert) > TH_STILL) lastMotionMs = now;
+// aVert : accel verticale lineaire (m/s2, + = haut) ; gMag : norme gyro (rad/s)
+void processSample(float aVert, float gMag, float g[3], float dt, uint32_t now) {
+  vVert += aVert * dt;                       // integration de la vitesse verticale
+
+  // --- ZVU : quasi-immobile sur une fenetre -> on annule la derive ---
+  bool quiet = (fabsf(aVert) < A_QUIET) && (gMag < G_QUIET);
+  if (!quiet) { quietSinceMs = now; lastMotionMs = now; }
+  if (now - quietSinceMs >= QUIET_MS) {
+    if (state == ST_ASC) finishRep(now);     // pause en haut = fin de la montee
+    vVert = 0;                               // remise a zero de la vitesse
+    vOff += 0.02f * aVert;                    // recalage lent de l'offset accel
+    for (int k = 0; k < 3; k++) gyroBias[k] += 0.01f * g[k];
+    state = ST_WAIT;
+    return;
+  }
+
   switch (state) {
-    case ST_IDLE:
-      if (aVert > TH_START) { state = ST_CONC; v = 0; disp = 0; repPeak = 0; repStartMs = now; }
-      else if (aVert < -TH_START) { state = ST_SUPPRESS; stillSinceMs = now; }
+    case ST_WAIT:
+      if (vVert < -V_MOVE) { state = ST_DESC; eccDisp = 0; }          // descente
+      else if (vVert > V_MOVE) {                                       // montee directe (souleve)
+        state = ST_ASC; concDisp = 0; concPeak = 0; concStartMs = now;
+      }
       break;
-    case ST_CONC: {
-      v += aVert * dt; disp += v * dt;
-      if (v > repPeak) repPeak = v;
-      uint32_t dur = now - repStartMs;
-      if ((v <= 0 && dur >= REP_MIN_MS) || dur > REP_MAX_MS) endRep(now);
+
+    case ST_DESC:
+      eccDisp += vVert * dt;                  // s'accumule en negatif
+      if (vVert >= 0) {                        // <-- vitesse change de sens = BAS atteint
+        if (fabsf(eccDisp) >= ECC_MIN_DISP) {  // vraie descente (pas un tremblement)
+          vVert = 0;                           // ancrage : vitesse nulle au point bas
+          concDisp = 0; concPeak = 0; concStartMs = now;
+          state = ST_ASC;
+        } else {
+          state = ST_WAIT;
+        }
+      }
       break;
-    }
-    case ST_SUPPRESS:
-      if (fabsf(aVert) > TH_STILL) stillSinceMs = now;
-      if (now - stillSinceMs >= STILL_MS) state = ST_IDLE;
+
+    case ST_ASC:
+      concDisp += vVert * dt;
+      if (vVert > concPeak) concPeak = vVert;
+      if (vVert <= 0 && (now - concStartMs) >= REP_MIN_MS) finishRep(now);  // HAUT atteint
       break;
   }
+}
+
+// Debloque le bus I2C si le MPU est reste coince (SDA tenu bas), ce que
+// peuvent provoquer les impulsions de boot sur GPIO43/U0TXD : on pulse SCL
+// jusqu'a 16 fois puis on genere une condition STOP propre.
+void i2cBusRecover() {
+  pinMode(PIN_I2C_SDA, INPUT_PULLUP);
+  pinMode(PIN_I2C_SCL, OUTPUT);
+  for (int i = 0; i < 16 && digitalRead(PIN_I2C_SDA) == LOW; i++) {
+    digitalWrite(PIN_I2C_SCL, HIGH); delayMicroseconds(6);
+    digitalWrite(PIN_I2C_SCL, LOW);  delayMicroseconds(6);
+  }
+  pinMode(PIN_I2C_SDA, OUTPUT);
+  digitalWrite(PIN_I2C_SDA, LOW);  delayMicroseconds(6);   // STOP : SDA monte
+  digitalWrite(PIN_I2C_SCL, HIGH); delayMicroseconds(6);   //        pendant que
+  digitalWrite(PIN_I2C_SDA, HIGH); delayMicroseconds(6);   //        SCL est haut
 }
 
 // ============================================================
@@ -250,17 +322,23 @@ void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
 
-  Wire.begin();            // D4=SDA, D5=SCL
+  // GPIO43 (= D6) est l'U0TXD : le bootloader y laisse la fonction UART et y
+  // envoie ses logs de boot. On remet les broches en GPIO simple, puis on
+  // debloque le bus, avant de demarrer l'I2C.
+  gpio_reset_pin((gpio_num_t)PIN_I2C_SDA);   // GPIO6  (D5)
+  gpio_reset_pin((gpio_num_t)PIN_I2C_SCL);   // GPIO43 (D6)
+  i2cBusRecover();
+  Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);   // SDA=GPIO6 (D5), SCL=GPIO43 (D6)
   Wire.setClock(400000);
 
-  uint8_t who = mpuRead8(0x75);   // WHO_AM_I : doit valoir 0x68
-  Serial.printf("WHO_AM_I = 0x%02X ", who);
-  if (who == 0x68 || who == 0x70 || who == 0x72) {
-    mpuOk = true; Serial.println("-> MPU detecte, OK");
+  whoami = mpuRead8(0x75);   // WHO_AM_I : doit valoir 0x68
+  Serial.printf("\n=== WHO_AM_I = 0x%02X ===\n", whoami);
+  if (whoami == 0x68 || whoami == 0x70 || whoami == 0x72) {
+    mpuOk = true; Serial.println("--> MPU6050 DETECTE, OK\n");
     mpuInitActive();
     calibrateGyro();
   } else {
-    Serial.println("-> AUCUNE reponse ! Verifie cablage SDA/SCL/3V3/GND (ou adresse AD0).");
+    Serial.println("--> AUCUNE REPONSE du MPU ! (verifie SDA=D4, SCL=D5, 3V3, GND, soudures, AD0)\n");
   }
 
   warmupUntil = millis() + WARMUP_MS;
@@ -270,8 +348,8 @@ void setup() {
 }
 
 void loop() {
-  static uint32_t lastUs = 0, lastDbg = 0;
-  static float dbgPeak = 0, dbgMag = 1;
+  static uint32_t lastUs = 0, lastDbg = 0, winReads = 0;
+  static float dbgPeak = 0, dbgMag = 0, dbgAx = 0, dbgAy = 0, dbgAz = 0;
   uint32_t nowUs = micros();
 
   if (mpuOk && nowUs - lastUs >= 1000000UL / SAMPLE_HZ) {
@@ -279,6 +357,7 @@ void loop() {
     lastUs = nowUs;
     float a[3], g[3];
     if (mpuReadMotion(a, g)) {
+      winReads++;
       uint32_t now = millis();
       float mag = sqrtf(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
       bool inMotion = fabsf(mag - 1.0f) > 0.15f;
@@ -286,28 +365,50 @@ void loop() {
       ahrs.update(g[0], g[1], g[2], a[0], a[1], a[2], beta, dt);
 
       float aVert = (ahrs.verticalOf(a[0], a[1], a[2]) - 1.0f) * 9.80665f - vOff;
-      dbgMag = mag;
+      float gMag = sqrtf(g[0] * g[0] + g[1] * g[1] + g[2] * g[2]);
+      dbgMag = mag; dbgAx = a[0]; dbgAy = a[1]; dbgAz = a[2];
       if (fabsf(aVert) > fabsf(dbgPeak)) dbgPeak = aVert;
 
-      float gMag = sqrtf(g[0] * g[0] + g[1] * g[1] + g[2] * g[2]);
-      if (state == ST_IDLE && gMag < 0.05f && fabsf(aVert) < 0.6f) {
-        vOff += 0.002f * aVert;
-        for (int k = 0; k < 3; k++) gyroBias[k] += 0.002f * g[k];
-      }
-
-      if (now >= warmupUntil) processSample(aVert, dt, now);
+      if (now >= warmupUntil) processSample(aVert, gMag, g, dt, now);
       else lastMotionMs = now;
     }
   }
 
   uint32_t now = millis();
+
+  // re-publicite robuste : on attend ~500 ms apres la deconnexion avant de
+  // relancer l'annonce (relancer dans le callback echoue souvent)
+  if (reAdvertise && now - disconnectMs > 500) {
+    BLEDevice::startAdvertising();
+    reAdvertise = false;
+    Serial.println("BLE : re-annonce active");
+  }
+
+  // heartbeat ~1.4 Hz tant qu'on est connecte
+  static uint32_t lastHb = 0;
+  if (connected && now - lastHb >= 700) { lastHb = now; sendStatus(); }
+
 #if DEBUG_STREAM
-  if (now - lastDbg >= 100) {          // 10 Hz : aVert max sur la fenêtre
+  if (now - lastDbg >= 500) {                 // 2 Hz : lisible
+    float dtWin = (now - lastDbg) / 1000.0f;
     lastDbg = now;
-    const char* st = state == ST_IDLE ? "IDLE" : state == ST_CONC ? "CONC" : "SUPP";
-    Serial.printf("aVert_max=%+5.2f m/s2  |a|=%4.2fg  etat=%s  reps=%d  %s\n",
-                  dbgPeak, dbgMag, st, repCount, connected ? "BLE+" : "BLE-");
-    dbgPeak = 0;
+    if (!mpuOk) {
+      whoami = mpuRead8(0x75);                 // re-tente la detection a chaud
+      if (whoami == 0x68 || whoami == 0x70 || whoami == 0x72) {
+        mpuOk = true; mpuInitActive(); calibrateGyro();
+        Serial.println("--> MPU6050 detecte a chaud, OK");
+      } else {
+        Serial.printf("[!] MPU NON DETECTE  WHO_AM_I=0x%02X  ->  verifie 3V3 / GND / SDA=D4 / SCL=D5 / soudures / AD0\n",
+                      whoami);
+      }
+    } else {
+      const char* st = state == ST_WAIT ? "ATTENTE" : state == ST_DESC ? "DESCENTE" : "MONTEE ";
+      Serial.printf("MPU 0x%02X | %3lu lect/s | aVert_max=%+.2f | vVert=%+.2f m/s | %s | reps=%d | %s\n",
+                    whoami, (unsigned long)(winReads / (dtWin > 0 ? dtWin : 1)),
+                    dbgPeak, vVert, st, repCount,
+                    connected ? "BLE CONNECTE" : "BLE en attente (VBT-Tracker)");
+    }
+    dbgPeak = 0; winReads = 0;
   }
 #endif
 

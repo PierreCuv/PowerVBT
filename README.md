@@ -39,8 +39,8 @@ connecte au capteur via Web Bluetooth.
 |------------------|---------------|------|
 | VCC              | 3V3           | Alimentation |
 | GND              | GND           | Masse |
-| SDA              | D4 (GPIO5)    | I2C — données |
-| SCL              | D5 (GPIO6)    | I2C — horloge |
+| SDA              | D5 (GPIO6)    | I2C — données |
+| SCL              | D6 (GPIO43)   | I2C — horloge |
 | INT              | D0 (GPIO1)    | Réveil sur mouvement |
 
 La batterie LiPo se branche sur les pads BAT+ / BAT− au dos du XIAO

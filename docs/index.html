@@ -102,6 +102,7 @@ var RX  = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
 var TX  = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 
 var reps = [], rxChar = null, buf = "";
+var device = null, txCharRef = null, lastSeen = 0, reconnecting = false, alive = false;
 function $(id){ return document.getElementById(id); }
 
 function zoneOf(v){
@@ -169,10 +170,14 @@ function handleLine(line){
     var idx = parseInt(p[1]), mean = parseFloat(p[2]), peak = parseFloat(p[3]);
     reps[idx] = [mean, peak];
     render();
+  } else if (p[0] === "S"){          // heartbeat : etat,derniereVitesse,nbReps
+    var inRep = p[1] === "1";
+    setBadge(true, inRep ? "Rep en cours…" : "Connecté");
   }
 }
 
 function onNotify(e){
+  lastSeen = Date.now();
   var txt = new TextDecoder().decode(e.target.value);
   buf += txt;
   var nl;
@@ -182,6 +187,14 @@ function onNotify(e){
   }
 }
 
+// Surveille le heartbeat : si plus rien pendant 3 s, le lien est suspect
+setInterval(function(){
+  if (!device || !device.gatt || !device.gatt.connected) return;
+  var silent = Date.now() - lastSeen;
+  if (silent > 3000 && alive){ alive = false; setBadge(true, "Signal faible…"); }
+  else if (silent <= 3000 && !alive){ alive = true; }
+}, 1000);
+
 async function connect(){
   if (!navigator.bluetooth){
     $("hint").textContent = "Web Bluetooth indisponible — ouvre cette page dans Bluefy.";
@@ -189,26 +202,53 @@ async function connect(){
   }
   try {
     setBadge(false, "Recherche…");
-    var dev = await navigator.bluetooth.requestDevice({
+    device = await navigator.bluetooth.requestDevice({
       filters: [{ name: "VBT-Tracker" }],
       optionalServices: [SVC]
     });
-    dev.addEventListener("gattserverdisconnected", function(){
-      setBadge(false, "Déconnecté");
-      $("hint").textContent = "Capteur déconnecté — reclique sur Connecter.";
-    });
-    var srv = await dev.gatt.connect();
-    var svc = await srv.getPrimaryService(SVC);
-    var tx  = await svc.getCharacteristic(TX);
-    rxChar  = await svc.getCharacteristic(RX);
-    await tx.startNotifications();
-    tx.addEventListener("characteristicvaluechanged", onNotify);
-    setBadge(true, "Connecté");
-    $("hint").textContent = "";
-    await send("D");   // demande l'historique des reps déjà mesurées
+    device.addEventListener("gattserverdisconnected", onDisconnected);
+    await openGatt();
   } catch(e){
     setBadge(false, "Non connecté");
     $("hint").textContent = "Connexion annulée ou échouée : " + e.message;
+  }
+}
+
+// Ouvre (ou rouvre) la liaison GATT sur le device déjà choisi
+async function openGatt(){
+  var srv = await device.gatt.connect();
+  var svc = await srv.getPrimaryService(SVC);
+  txCharRef = await svc.getCharacteristic(TX);
+  rxChar    = await svc.getCharacteristic(RX);
+  await txCharRef.startNotifications();
+  txCharRef.addEventListener("characteristicvaluechanged", onNotify);
+  lastSeen = Date.now(); alive = true; reconnecting = false;
+  setBadge(true, "Connecté");
+  $("hint").textContent = "";
+  await send("D");        // redemande l'historique (utile après reconnexion)
+}
+
+function onDisconnected(){
+  setBadge(false, "Reconnexion…");
+  $("hint").textContent = "Lien perdu — tentative de reconnexion automatique…";
+  tryReconnect(1);
+}
+
+// Quelques tentatives automatiques avant d'abandonner et de rendre la main
+async function tryReconnect(attempt){
+  if (reconnecting || !device) return;
+  if (attempt > 5){
+    reconnecting = false;
+    setBadge(false, "Déconnecté");
+    $("hint").textContent = "Reconnexion impossible — reclique sur Connecter.";
+    return;
+  }
+  reconnecting = true;
+  try {
+    await openGatt();
+  } catch(e){
+    reconnecting = false;
+    setTimeout(function(){ tryReconnect(attempt + 1); }, 1200);
   }
 }
 
