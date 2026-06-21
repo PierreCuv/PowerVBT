@@ -6,10 +6,9 @@ d'allumage, pour que les décisions restent compréhensibles plus tard.
 ## TL;DR (le choix retenu)
 
 - Batterie **LiPo 680 mAh, avec son propre circuit de protection (PCM)**.
-- Allumage/extinction par **interrupteur sur la broche EN** du XIAO (pas sur
-  la ligne batterie).
-- Batterie reliée en permanence à BAT+ / BAT− → **recharge possible même
-  appareil éteint**.
+- Allumage/extinction par **interrupteur sur la ligne BAT+** entre la batterie
+  et le XIAO.
+- Coupure totale quand éteint → **0 µA de consommation**.
 
 ## 1. Le circuit d'alimentation du XIAO ESP32-S3
 
@@ -65,36 +64,29 @@ court-circuit.
 
 Deux options étaient possibles :
 
-| | **Interrupteur sur EN** (retenu) | Interrupteur sur BAT+ |
+| | Interrupteur sur EN | **Interrupteur sur BAT+** (retenu) |
 |---|---|---|
 | Conso éteint | ~50–200 µA (faible courant de repos) | **0 µA** (coupure totale) |
-| Charge appareil éteint | **Oui** | Non (ON requis pour charger) |
+| Charge appareil éteint | Oui | **Non** (ON requis pour charger) |
 | Risque sur-décharge | Couvert par le PCM de la batterie | Très faible (batterie isolée) |
-| Tenue au stockage long | Quelques mois (PCM coupe avant dégât) | Quasi illimitée |
+| Tenue au stockage long | Quelques mois (PCM coupe avant dégât) | **Quasi illimitée** |
 
-**Décision : interrupteur sur EN.** Justification : puisque la batterie a son
-propre PCM, la sur-décharge n'est plus un danger, ce qui débloque le confort
-de **charger même éteint**. Le seul compromis (petit courant de repos) est
-sans risque grâce au PCM — au pire la batterie est à plat après une très
-longue pause, et il suffit de la recharger.
+**Décision : interrupteur sur BAT+.** La coupure est totale (0 µA), ce qui
+est idéal pour le stockage long. Le seul compromis est qu'il faut allumer
+l'appareil pour le recharger, ce qui est acceptable en utilisation normale.
 
-> Si un jour l'autonomie au repos devient gênante (appareil laissé des
-> semaines sans charge), repasser à l'interrupteur sur **BAT+** redonne une
-> coupure totale. Le code n'a pas à changer.
-
-### Câblage retenu (EN)
+### Câblage retenu (BAT+)
 
 | Connexion | |
 |-----------|--|
-| Batterie **+** (orange) | → pad **BAT+** (direct, sans interrupteur) |
-| Batterie **−** (bleu) | → pad **BAT−** (direct) |
-| Interrupteur, broche **milieu** | → pad **EN** |
-| Interrupteur, **une** broche extérieure | → **GND** |
+| Batterie **+** (orange) | → broche **milieu** de l'interrupteur |
+| Interrupteur, **une** broche extérieure | → pad **BAT+** du XIAO |
 | Interrupteur, autre broche extérieure | libre |
+| Batterie **−** (bleu) | → pad **BAT−** du XIAO (direct) |
 
-Fonctionnement (EN possède une résistance de tirage interne au 3,3 V) :
-- curseur côté **GND** → EN à la masse → ESP32 en reset = **OFF** ;
-- curseur côté **libre** → EN tiré au niveau haut → ESP32 démarre = **ON**.
+Fonctionnement :
+- curseur côté **BAT+** → courant passe → XIAO alimenté = **ON** ;
+- curseur côté **libre** → circuit ouvert → XIAO hors tension = **OFF**.
 
 ## Sources
 
