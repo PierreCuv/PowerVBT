@@ -1,0 +1,164 @@
+
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║          SCHÉMA ÉLECTRONIQUE — VBT + DEPTH TRACKER                                  ║
+║          ESP32 XIAO S3 + MPU6050 + Potentiomètre à fil + Buzzer                     ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ BLOC 1 — ALIMENTATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+                          ┌─── USB-C ────────────── VUSB
+                          │
+  BAT1                    │         U2 SGM40567
+  LiPo 680mAh     ────────┼─────── VBAT            VOUT ─────────────────── +3V3
+  +    [JST 2p]           │         GND  ─────────────────────────────────── GND
+  ─    ───────────────────┴──────── GND
+                                    /CE ──── SW1 (ON/OFF) ─────────────────── GND
+                                                 [bouton poussoir ou switch]
+
+  Note : SW1 est connecté à la broche EN du XIAO (voir BLOC 2)
+  Quand SW1 est ouvert → EN pull-up → XIAO actif
+  Quand SW1 est fermé  → EN à GND  → XIAO en veille (mais chargement possible via USB)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ BLOC 2 — MICROCONTRÔLEUR (XIAO ESP32-S3) — composant central
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+                              U1 — XIAO ESP32-S3
+                         ┌──────────────────────────┐
+              +3V3 ──────┤ 3V3               5V     ├────── (non connecté)
+               GND ──────┤ GND               GND    ├────── GND
+                         │                          │
+    [BUZZER BZ1] ────────┤ D3 / GPIO4    GPIO1 / D0 ├────── [MPU6050 INT]
+                         │                          │
+   [POTENTIO J1] ────────┤ D1 / GPIO2    GPIO6 / D5 ├────── [MPU6050 SDA]
+                         │                          │
+                         │               GPIO43/ D6 ├────── [MPU6050 SCL]
+                         │                          │
+                         │               EN         ├────── [SW1 ON/OFF]
+                         │                          │
+                         │   (autres pins libres)   │
+                         └──────────────────────────┘
+
+  GPIO2  (D1)  → lecture ADC potentiomètre (ADC1_CH1) ← NE PAS UTILISER ADC2 (conflit WiFi)
+  GPIO4  (D3)  → sortie PWM buzzer passif
+  GPIO1  (D0)  → interruption MPU6050 (existant)
+  GPIO6  (D5)  → I2C SDA MPU6050 (existant)
+  GPIO43 (D6)  → I2C SCL MPU6050 (existant)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ BLOC 3 — IMU MPU6050 / GY-521 (composant EXISTANT, inchangé)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+                              U3 — MPU6050 (GY-521)
+                         ┌──────────────────────────┐
+              +3V3 ──────┤ VCC              SCL     ├────── GPIO43 (D6) — XIAO
+               GND ──────┤ GND              SDA     ├────── GPIO6  (D5) — XIAO
+                         │                          │
+                         │                 INT      ├────── GPIO1  (D0) — XIAO
+                         │                          │
+                         │                 AD0      ├────── GND  (adresse I2C = 0x68)
+                         └──────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ BLOC 4 — POTENTIOMÈTRE À FIL (NOUVEAU)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Connecteur J1 (JST-PH 2mm, 3 broches)
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                                                                 │
+  │  J1 pin 1 (VCC) ──────────────────────────────── +3V3          │
+  │                                                                 │
+  │                        R1 (1kΩ)      ┐                         │
+  │  J1 pin 2 (SIG) ───────┤├────────── GPIO2 (D1) — XIAO ADC     │
+  │                                      │                         │
+  │                                     C1 (100nF)                 │
+  │                                      │                         │
+  │  J1 pin 3 (GND) ─────────────────────┴──────────── GND        │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  Potentiomètre Bourns 3590S (10 tours, 10kΩ) :
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                                                                 │
+  │   Broche 1 (sens horaire  / CW)  ────────────────── +3V3       │
+  │   Broche 2 (curseur / WIPER)     ──── J1 pin 2 (SIG)           │
+  │   Broche 3 (sens anti-horaire / CCW) ──────────────── GND      │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  Filtre RC sur l'entrée ADC :
+  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+  R1 + C1 forment un filtre passe-bas : f_coupure = 1/(2π × 1kΩ × 100nF) ≈ 1.6 kHz
+  → élimine le bruit hautes fréquences de l'ADC de l'ESP32 (connu pour être bruité)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ BLOC 5 — BUZZER PIÉZO PASSIF (NOUVEAU)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  BZ1 — Buzzer piézo passif 3.3V
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                                                                 │
+  │   GPIO4 (D3) — XIAO ───────────────── BZ1 (+)                  │
+  │                                        BZ1 (−) ──────── GND    │
+  │                                                                 │
+  │   Pas de transistor nécessaire : piézo passif < 5mA            │
+  │   Signal PWM généré par le firmware (tone() Arduino)           │
+  │   Fréquence recommandée : 2700 Hz (résonance typique buzzer)   │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ RÉCAPITULATIF DES NETS (connexions)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  NET +3V3 :  SGM40567.VOUT — XIAO.3V3 — MPU6050.VCC — POTENTIO.broche1
+  NET GND  :  SGM40567.GND  — XIAO.GND — MPU6050.GND — POTENTIO.broche3
+                              BAT1.− — C1.bas — R1 (via GPIO2)
+
+  NET SDA  :  XIAO.GPIO6  ←→  MPU6050.SDA
+  NET SCL  :  XIAO.GPIO43 ←→  MPU6050.SCL
+  NET INT  :  XIAO.GPIO1  ←   MPU6050.INT
+
+  NET POT_SIG : POTENTIO.broche2 → R1 → XIAO.GPIO2
+                                         C1 → GND
+  NET BUZZ :  XIAO.GPIO4 → BZ1.+
+              BZ1.− → GND
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ LISTE DES COMPOSANTS (BOM)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Réf   Valeur / Référence              Package          Qté
+  ────  ──────────────────────────────  ───────────────  ────
+  U1    Seeed XIAO ESP32-S3             SMD (propre)     1      ← déjà disponible
+  U2    SGM40567 (chargeur LiPo)        SOT-23-5         1      ← déjà sur PCB
+  U3    MPU6050 (module GY-521)         module DIP       1      ← déjà disponible
+  BAT1  LiPo 3.7V 680mAh + PCM         JST-PH 2p        1      ← déjà disponible
+  Q1    LP0404N3T5G (MOSFET)            SOT-23            1      ← déjà sur PCB
+  SW1   Switch ON/OFF                   traversant       1      ← déjà sur PCB
+  J1    Connecteur JST-PH 2mm 3 broches SMD ou traversant 1     ← NOUVEAU
+  POT1  Bourns 3590S-2-103L (10kΩ 10t) (externe via J1) 1      ← NOUVEAU (hors PCB)
+  BZ1   Buzzer piézo passif 3.3V        SMD ou traversant 1     ← NOUVEAU
+  R1    1kΩ 1/8W                        0402 ou 0603     1      ← NOUVEAU
+  C1    100nF 10V                       0402 ou 0603     1      ← NOUVEAU
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ MODIFICATIONS PCB PAR RAPPORT À L'EXISTANT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  À AJOUTER sur le PCB :
+  ✚ Empreinte JST-PH 2mm 3 broches (J1) — pour câble vers potentiomètre
+  ✚ Résistance R1 1kΩ en série entre J1.pin2 et pad GPIO2 du XIAO
+  ✚ Condensateur C1 100nF entre pad GPIO2 (après R1) et GND
+  ✚ Empreinte buzzer piézo (2 pastilles, pas 5.08mm) reliée à GPIO4 et GND
+
+  INCHANGÉ :
+  ○ Circuit SGM40567 + Q1 (alimentation)
+  ○ Empreinte XIAO ESP32-S3
+  ○ Connecteur batterie JST 2 broches
+  ○ Switch ON/OFF
+  ○ Connecteur MPU6050 / empreinte GY-521
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
