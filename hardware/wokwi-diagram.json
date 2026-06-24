@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "author": "PowerVBT",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-esp32-devkit-v1",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "pot1",
+      "top": -90,
+      "left": 260,
+      "attrs": { "value": "0" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": 48,
+      "left": 318,
+      "rotate": 90,
+      "attrs": { "value": "1000" }
+    },
+    {
+      "type": "wokwi-capacitor",
+      "id": "c1",
+      "top": 100,
+      "left": 380,
+      "rotate": 90,
+      "attrs": { "value": "1e-7" }
+    },
+    {
+      "type": "wokwi-buzzer",
+      "id": "bz1",
+      "top": 160,
+      "left": 260,
+      "attrs": { "volume": "0.5" }
+    }
+  ],
+  "connections": [
+    ["esp:3V3",   "pot1:VCC", "red",    []],
+    ["esp:GND.2", "pot1:GND", "black",  []],
+    ["pot1:SIG",  "r1:1",     "green",  []],
+    ["r1:2",      "esp:2",    "green",  []],
+    ["r1:2",      "c1:1",     "green",  []],
+    ["c1:2",      "esp:GND.2","black",  []],
+    ["esp:4",     "bz1:1",    "orange", []],
+    ["bz1:2",     "esp:GND.2","black",  []]
+  ]
+}
